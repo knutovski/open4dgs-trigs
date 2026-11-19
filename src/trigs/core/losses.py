@@ -142,16 +142,12 @@ def reconstruction_loss(
     if backend == "fused":
         from fused_ssim import fused_ssim
         ssim_val = fused_ssim(pred_bchw, target_bchw, padding="valid")
-    elif backend == "torchmetrics":
-        try:
-            from torchmetrics.image import structural_similarity_index_measure  # type: ignore[attr-defined]
-        except ImportError:
-            from torchmetrics.functional import structural_similarity_index_measure  # type: ignore[attr-defined]
-        ssim_val = structural_similarity_index_measure(
-            pred_bchw, target_bchw, data_range=1.0
-        )
-    else:  # custom
-        ssim_val = _ssim_custom(pred_bchw, target_bchw)
+    else:
+        # macOS port: without fused_ssim (CUDA-only) use a pure-PyTorch SSIM that
+        # reproduces fused_ssim(padding="valid"), instead of torchmetrics (reflect
+        # padding, different value) or _ssim_custom (same-padding mean).
+        from trigs.compat.ops import ssim_fused_compatible
+        ssim_val = ssim_fused_compatible(pred_bchw, target_bchw, padding="valid")
 
     ssim_loss = 1.0 - ssim_val
 
