@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, TYPE_CHECKING
 
 import torch
+from trigs.compat.device import resolve_device, empty_cache, device_synchronize, manual_seed_all, accelerator_rng_states  # macOS port
 import torch.nn as nn
 import torch.nn.functional as F
 from gsplat import rasterization
@@ -1308,8 +1309,8 @@ class TrigsTrainer:
     pruning. Wasted capacity is recycled by motion-guided relocation.
     """
 
-    def __init__(self, device: str = "cuda"):
-        self.device = torch.device(device if torch.cuda.is_available() else "cpu")
+    def __init__(self, device: str = "auto"):
+        self.device = resolve_device(device)
         self.temporal_hierarchy = None
         self.temporal_hierarchy_last_validation_step = -1
 
@@ -2032,8 +2033,7 @@ class TrigsTrainer:
             capacity_start = alive_rows_per_frame(
                 residency.master, n_frames, config.fps, config.relocate_tau_alpha,
             ).double()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        empty_cache()
 
         freeze_nonowned = bool(
             getattr(config, "temporal_chunk_freeze_nonowned", True)
@@ -2520,8 +2520,7 @@ class TrigsTrainer:
 
                 del sub_params, result
                 self.temporal_hierarchy = None
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
+                empty_cache()
                 global_step_offset += int(steps_this_call)
                 call_index += 1
 
@@ -3376,7 +3375,7 @@ class TrigsTrainer:
                 a.clamp(0, 1).mul(255).to(torch.uint8).cpu() for a in result.alphas
             ]
             del gs, result
-        torch.cuda.empty_cache()
+        empty_cache()
         return gt_images, gt_alphas
 
     # -------------------------------------------------------------------------
@@ -4185,8 +4184,7 @@ class TrigsTrainer:
                         gt_times_per_frame=gt_times_per_frame, step=step,
                     ))
             del sub_params
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            empty_cache()
 
         results: Dict[str, Dict[str, float]] = {}
         for name, parts in accums.items():
@@ -4796,7 +4794,7 @@ class TrigsTrainer:
             }
         payload["rng_state"] = {
             "python": random.getstate(), "torch": torch.get_rng_state(),
-            "cuda_all": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
+            **accelerator_rng_states(),
         }
         torch.save(payload, tmp_path)
         tmp_path.replace(out_path)
@@ -4951,8 +4949,7 @@ class TrigsTrainer:
         if train_seed >= 0:
             random.seed(train_seed)
             torch.manual_seed(train_seed)
-            if torch.cuda.is_available():
-                torch.cuda.manual_seed_all(train_seed)
+            manual_seed_all(train_seed)
             if config.verbose:
                 print(f"  Training RNGs seeded: train_seed={train_seed}")
 
@@ -5345,8 +5342,7 @@ class TrigsTrainer:
                 render_colors, render_alphas, cam_gamma, cam_info = self._render(
                     params, cameras, cam_idx, t, sh_degree, config, step=step,
                 )
-                if torch.cuda.is_available():
-                    torch.cuda.synchronize()
+                device_synchronize()
 
                 self._cuda_probe(f"step={step} after render frame={frame_idx} cam={cam_idx}")
 
@@ -5801,8 +5797,7 @@ class TrigsTrainer:
                     _enforce_relocation_class_invariants(params)
                     rigid_knn_dirty = True
 
-                    if torch.cuda.is_available():
-                        torch.cuda.synchronize()
+                    device_synchronize()
 
                     if (
                         os.environ.get("TRIGS_RELOC_LOG", "0") == "1"

@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Dict, List
 
 import torch
+from trigs.compat.device import resolve_device  # macOS port
 import tyro
 from gsply import GSTensor
 from tqdm import tqdm
@@ -91,7 +92,7 @@ class TrigsSelfCapArgs:
     config: TrigsTrainingConfig = field(default_factory=TrigsTrainingConfig)
     """TriGS training configuration."""
 
-    device: str = "cuda"
+    device: str = "auto"
 
     save_plys: bool = True
     """If True, decode and save per-frame PLYs after training."""
@@ -281,6 +282,7 @@ def _build_test_set(n_cameras: int, test_camera_idx: int) -> List[int]:
 def main(args: TrigsSelfCapArgs | None = None) -> None:
     if args is None:
         args = tyro.cli(TrigsSelfCapArgs)
+    args.device = str(resolve_device(args.device))
     logging.basicConfig(
         level=logging.DEBUG if args.config.diagnostics else logging.INFO,
         format="%(levelname)s: %(message)s",

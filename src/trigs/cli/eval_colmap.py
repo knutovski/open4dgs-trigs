@@ -32,6 +32,7 @@ from typing import Any
 import cv2
 import numpy as np
 import torch
+from trigs.compat.device import resolve_device, empty_cache  # macOS port
 import tyro
 from PIL import Image
 from torch import nn
@@ -91,7 +92,7 @@ class EvalColmapArgs:
     rs_flip_sign: bool = False
     """Same as training."""
 
-    device: str = "cuda"
+    device: str = "auto"
     """Torch device."""
 
     crop_cams: tuple[str, ...] = ()
@@ -336,6 +337,7 @@ def _fmt_blur(summary: dict) -> str:
 def main(args: EvalColmapArgs | None = None) -> None:
     if args is None:
         args = tyro.cli(EvalColmapArgs)
+    args.device = str(resolve_device(args.device))
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     if len(args.crop_boxes) != len(args.crop_cams):
         raise SystemExit("--crop-boxes needs exactly one box per --crop-cams entry")
@@ -395,7 +397,7 @@ def main(args: EvalColmapArgs | None = None) -> None:
             timing_scenes[key] = build_colmap_scene(sa)
         sc = timing_scenes[key]
         return sc.cameras, sc.gt_times
-    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+    device = resolve_device(args.device)
     lpips = _Lpips(device, args.lpips_net) if args.crop_cams else None
 
     crops: list[tuple[str, int, int, tuple[int, int, int, int]]] = []
@@ -552,8 +554,7 @@ def main(args: EvalColmapArgs | None = None) -> None:
             print(f"    blur: {_fmt_blur(entry['blur'])}", flush=True)
         report["runs"][str(run)] = entry
         del params, trainer
-        if device.type == "cuda":
-            torch.cuda.empty_cache()
+        empty_cache(device)
 
     for (folder, frame), row in tiles.items():
         strip = np.concatenate([img for _, img in row], axis=1)

@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Literal
 
 import numpy as np
 import torch
+from trigs.compat.device import resolve_device  # macOS port
 import torch.nn as nn
 import tyro
 from tqdm import tqdm
@@ -40,7 +41,7 @@ class EvalArgs:
     output_dir: Path
     """Directory to write evaluation outputs."""
 
-    device: str = "cuda"
+    device: str = "auto"
     """Torch device for rendering and metric computation."""
 
     data_factor: int | None = None
@@ -219,9 +220,10 @@ def _open_ffmpeg_video_pipe(
 def main(args: EvalArgs | None = None) -> None:
     if args is None:
         args = tyro.cli(EvalArgs)
+    args.device = str(resolve_device(args.device))
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
-    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+    device = resolve_device(args.device)
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 

@@ -21,6 +21,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
+from trigs.compat.device import resolve_device  # macOS port
 import torch.nn as nn
 from torch import Tensor
 
@@ -304,7 +305,7 @@ def build_canonical_from_npz_pair_as_selfcap(
     duration_max_s: float = 0.0,
     dense_duration_multiplier: float = 5.0,
     sparse_duration_multiplier: float = 1.0,
-    device: str = "cuda",
+    device: str = "auto",
     verbose: bool = True,
 ) -> Tuple[nn.ParameterDict, int, float]:
     """Build COLMAP params by treating two NPZs like SelfCap dense/sparse PCDs.
@@ -321,7 +322,7 @@ def build_canonical_from_npz_pair_as_selfcap(
     if static_from not in {"anchor", "coverage", "both", "none"}:
         raise ValueError("static_from must be one of: anchor, coverage, both, none")
 
-    dev = torch.device(device if torch.cuda.is_available() else "cpu")
+    dev = resolve_device(device)
     anchor = _LoadedNPZ(anchor_npz_path)
     coverage = _LoadedNPZ(coverage_npz_path)
 

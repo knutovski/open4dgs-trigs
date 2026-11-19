@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Any, Dict
 
 import torch
+from trigs.compat.device import resolve_device  # macOS port
 import torch.nn as nn
 from torch import Tensor
 
@@ -85,7 +86,7 @@ class MotionGuidedRelocationStrategy(Strategy):
     def initialize_state(
         self,
         n_primitives: int,
-        device: torch.device | str = "cuda",
+        device: torch.device | str = "auto",
     ) -> Dict[str, Any]:
         """Allocate the two grad accumulators that drive relocation scores.
 
@@ -93,6 +94,7 @@ class MotionGuidedRelocationStrategy(Strategy):
             n_primitives: Initial primitive count (shape of the accumulators).
             device: Device for the accumulators.
         """
+        device = resolve_device(device)  # macOS port: "auto" -> cuda/mps/cpu
         return {
             "grad_2d_accum": torch.zeros(n_primitives, device=device),
             "grad_t_accum": torch.zeros(n_primitives, device=device),

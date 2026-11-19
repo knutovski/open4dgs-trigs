@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, TYPE_CHECKING
 
 import numpy as np
 import torch
+from trigs.compat.device import resolve_device  # macOS port
 import torch.nn as nn
 from torch import Tensor
 from tqdm import tqdm
@@ -78,7 +79,7 @@ class Renderer:
 
     def __init__(
         self,
-        device: str = "cuda",
+        device: str = "auto",
         sh_degree: Optional[int] = None,
     ):
         """Initialize Renderer.
@@ -87,7 +88,7 @@ class Renderer:
             device: Target device for rendering
             sh_degree: Maximum SH degree to use (None = use model's degree)
         """
-        self.device = torch.device(device if torch.cuda.is_available() else "cpu")
+        self.device = resolve_device(device)
         self.sh_degree = sh_degree
 
     def _get_params_dict(

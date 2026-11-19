@@ -21,6 +21,7 @@ from pathlib import Path
 import imageio.v3 as imageio
 import numpy as np
 import torch
+from trigs.compat.device import resolve_device, empty_cache  # macOS port
 import tyro
 from gsply import GSTensor
 from tqdm import tqdm
@@ -58,7 +59,7 @@ class TrigsPipelineArgs:
     transform: TransformConfig = field(default_factory=TransformConfig)
     """Scene coordinate transform applied to every loaded PLY."""
 
-    device: str = "cuda"
+    device: str = "auto"
     """Target device."""
 
     render_debug: bool = True
@@ -92,6 +93,7 @@ def _save_checkpoint(
 def main(args: TrigsPipelineArgs | None = None) -> None:
     if args is None:
         args = tyro.cli(TrigsPipelineArgs)
+    args.device = str(resolve_device(args.device))
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
     input_path = Path(args.input_dir)
@@ -117,7 +119,7 @@ def main(args: TrigsPipelineArgs | None = None) -> None:
     cameras = args.camera.build(gs0)
     log.info(f"Built {cameras.viewmats.shape[0]} cameras")
     del gs0
-    torch.cuda.empty_cache()
+    empty_cache()
 
     # -- Tensorboard writer -------------------------------------------------
     tb_writer = None

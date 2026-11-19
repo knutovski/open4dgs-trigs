@@ -31,6 +31,7 @@ import cv2
 import imageio.v2 as imageio
 import numpy as np
 import torch
+from trigs.compat.device import get_default_device  # macOS port
 import torchvision.io as tv_io
 import torch.nn.functional as F
 
@@ -564,7 +565,7 @@ class FreeTimeParser:
                 
                 # Shape: [H, W, 2]
                 grid = torch.stack((grid_x, grid_y), dim=-1)
-                self.grid_dict[camera_id] = grid.to('cuda', non_blocking=True)
+                self.grid_dict[camera_id] = grid.to(get_default_device(), non_blocking=True)
 
 
 class FreeTimeDataset:
@@ -660,7 +661,11 @@ class FreeTimeDataset:
         if image_suffix in ('.jpg', '.jpeg'):
             try:
                 # Returns [C, H, W] uint8 tensor on CUDA.
-                img_tensor = tv_io.decode_jpeg(img_bytes, device='cuda')
+                _dev = get_default_device()
+                if _dev.type == 'cuda':
+                    img_tensor = tv_io.decode_jpeg(img_bytes, device='cuda')
+                else:  # macOS port: nvJPEG is CUDA-only; decode on CPU
+                    img_tensor = tv_io.decode_jpeg(img_bytes).to(_dev)
             except RuntimeError as cuda_exc:
                 try:
                     # CPU fallback for transient/driver-specific nvJPEG failures.
@@ -678,8 +683,7 @@ class FreeTimeDataset:
                     img_bytes,
                     mode=tv_io.ImageReadMode.RGB,
                 )
-                if torch.cuda.is_available():
-                    img_tensor = img_tensor.to('cuda', non_blocking=True)
+                img_tensor = img_tensor.to(get_default_device(), non_blocking=True)
             except Exception as exc:
                 raise RuntimeError(
                     f"PNG decode failed for {image_path} "

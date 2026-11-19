@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 import torch
+from trigs.compat.device import resolve_device, empty_cache  # macOS port
 import torch.nn as nn
 import torch.nn.functional as F
 from gsplat import rasterization
@@ -300,8 +301,8 @@ class TrigsTrainer:
     pruning. Wasted capacity is recycled by motion-guided relocation.
     """
 
-    def __init__(self, device: str = "cuda"):
-        self.device = torch.device(device if torch.cuda.is_available() else "cpu")
+    def __init__(self, device: str = "auto"):
+        self.device = resolve_device(device)
 
     # -------------------------------------------------------------------------
     # Public entry point
@@ -896,7 +897,7 @@ class TrigsTrainer:
                 for a in result.alphas
             ]
             del gs, result
-        torch.cuda.empty_cache()
+        empty_cache()
         return gt_images, gt_alphas
 
     # -------------------------------------------------------------------------

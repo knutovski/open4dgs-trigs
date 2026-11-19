@@ -22,6 +22,7 @@ from pathlib import Path
 import imageio.v3 as imageio
 import numpy as np
 import torch
+from trigs.compat.device import resolve_device, empty_cache  # macOS port
 import tyro
 from gsply import GSTensor
 from tqdm import tqdm
@@ -78,7 +79,7 @@ class TrigsPipelineArgs:
     step needs. Pair with ``--config.temporal-chunk-len-s`` for locality.
     """
 
-    device: str = "cuda"
+    device: str = "auto"
     """Target device."""
 
     render_debug: bool = True
@@ -406,6 +407,7 @@ def _save_checkpoint(
 def _main_extended(args: TrigsPipelineArgs | None = None) -> None:
     if args is None:
         args = tyro.cli(TrigsPipelineArgs)
+    args.device = str(resolve_device(args.device))
     logging.basicConfig(
         level=logging.DEBUG if args.config.diagnostics else logging.INFO,
         format="%(levelname)s: %(message)s",
@@ -449,7 +451,7 @@ def _main_extended(args: TrigsPipelineArgs | None = None) -> None:
     cameras = args.camera.build(gs0)
     log.info(f"Built {cameras.viewmats.shape[0]} cameras")
     del gs0
-    torch.cuda.empty_cache()
+    empty_cache()
 
     # -- Tensorboard writer -------------------------------------------------
     tb_writer = None

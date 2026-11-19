@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence
 
 import torch
+from trigs.compat.device import resolve_device  # macOS port
 import tyro
 
 from trigs.core.trainer import (
@@ -67,7 +68,7 @@ def _apply_anchor_init_from_npz_kind(
     zero_anchor_velocity: bool = True,
     min_sigma_t: float = 0.005,
     nn_max_distance: float = 1e-4,
-    device: str = "cuda",
+    device: str = "auto",
 ) -> None:
     """SelfCap-style per-class init for the COLMAP-NPZ canonical set.
 
@@ -95,6 +96,7 @@ def _apply_anchor_init_from_npz_kind(
     No-op if the NPZ has no `kind` field (e.g. single-pass prep), so it's
     safe to call unconditionally.
     """
+    device = resolve_device(device)  # macOS port: "auto" -> cuda/mps/cpu
     import numpy as np
     from scipy.spatial import cKDTree
 
@@ -261,7 +263,7 @@ class TrigsColmapArgs:
     config: TrigsTrainingConfig = field(default_factory=TrigsTrainingConfig)
     """TRiGS training configuration."""
 
-    device: str = "cuda"
+    device: str = "auto"
     """Target device."""
 
     masks_root: Path | None = None
@@ -1096,7 +1098,7 @@ def _apply_split_budget_to_prebuilt_params(
     protect_speed_top_frac: float = 0.0,
     fps: float = 60.0,
     config: TrigsTrainingConfig | None = None,
-    compute_device: str | torch.device = "cuda",
+    compute_device: str | torch.device = "auto",
     keyframe_stride: int = 0,
 ):
     n_old = int(params["means"].shape[0])
@@ -1252,7 +1254,7 @@ def _step0_frame_displacement(
     """||deform(mu + 0.5/fps) - deform(mu - 0.5/fps)|| per row: the starting
     curve's world displacement over one video frame centred on mu_t."""
     cfg = config if config is not None else TrigsTrainingConfig()
-    dev = torch.device(compute_device if torch.cuda.is_available() else "cpu")
+    dev = resolve_device(compute_device)
     n = int(params["means"].shape[0])
     names = [k for k, v in params.items() if torch.is_tensor(v) and v.ndim >= 1 and int(v.shape[0]) == n]
     out = []
@@ -1826,6 +1828,7 @@ def resolve_target_count(args: "TrigsColmapArgs", params: dict) -> None:
 def main(args: TrigsColmapArgs | None = None) -> None:
     if args is None:
         args = tyro.cli(TrigsColmapArgs)
+    args.device = str(resolve_device(args.device))
     logging.basicConfig(
         level=logging.DEBUG if args.config.diagnostics else logging.INFO,
         format="%(levelname)s: %(message)s",

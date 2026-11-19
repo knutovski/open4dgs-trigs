@@ -23,6 +23,7 @@ from collections.abc import Callable
 from typing import Any, Dict
 
 import torch
+from trigs.compat.device import device_synchronize, resolve_device  # macOS port
 import torch.nn as nn
 from torch import Tensor
 
@@ -113,8 +114,7 @@ def _cuda_sync_if_available() -> None:
     kernels, producing ``cudaErrorIllegalAddress`` that surfaces one iteration
     later at the next host-device sync.
     """
-    if torch.cuda.is_available():
-        torch.cuda.synchronize()
+    device_synchronize()
 
 
 @dataclass
@@ -229,8 +229,9 @@ class MotionGuidedRelocationStrategy(Strategy):
     def initialize_state(
         self,
         n_primitives: int,
-        device: torch.device | str = "cuda",
+        device: torch.device | str = "auto",
     ) -> Dict[str, Any]:
+        device = resolve_device(device)  # macOS port: "auto" -> cuda/mps/cpu
         return {
             "grad_2d_accum": torch.zeros(n_primitives, device=device),
             "grad_t_accum": torch.zeros(n_primitives, device=device),

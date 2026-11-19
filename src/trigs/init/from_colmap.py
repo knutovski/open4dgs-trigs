@@ -32,6 +32,7 @@ from typing import Tuple
 
 import numpy as np
 import torch
+from trigs.compat.device import resolve_device  # macOS port
 import torch.nn as nn
 from torch import Tensor
 
@@ -193,7 +194,7 @@ def build_canonical_from_npz(
     init_chain_min_span_frames: int = 6,
     keyframe_stride: int = 1,
     max_sh_degree: int = 3,
-    device: str = "cuda",
+    device: str = "auto",
     source_frame_start: int | None = None,
     source_frame_end: int | None = None,
     keep_global_static_when_filtering: bool = True,
@@ -221,9 +222,9 @@ def build_canonical_from_npz(
         keep_global_static_when_filtering = bool(keep_static_when_filtering)
 
     npz = np.load(str(npz_path), allow_pickle=True)
-    dev = torch.device(device if torch.cuda.is_available() else "cpu")
+    dev = resolve_device(device)
     cdev = torch.device(
-        compute_device if compute_device is not None and torch.cuda.is_available()
+        resolve_device(compute_device) if compute_device is not None
         else dev
     )
 

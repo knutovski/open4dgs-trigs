@@ -48,6 +48,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
+from trigs.compat.device import resolve_device, empty_cache, is_oom_error  # macOS port
 import torch.nn.functional as F
 import viser
 from gsplat.rendering import rasterization
@@ -313,7 +314,7 @@ class ConfigTriGS:
     ckpt: str = ""
     npz_path: Optional[str] = None
     port: int = 8080
-    device: str = "cuda"
+    device: str = "auto"
 
     # Live mode: follow a trainer's viewer-snapshot directory (see
     # viewer_snapshot.py) and swap each new snapshot in without restarting.
@@ -416,7 +417,7 @@ class SplatsTriGS:
         raising -- snapshots of a running job may legitimately change rows.
         """
         self.cfg = cfg
-        self.dev = cfg.device
+        self.dev = str(resolve_device(cfg.device))
         self._log = print if verbose else (lambda *a, **k: None)
         self.step: Optional[int] = ckpt.get("step")
         self.npz_note = ""
@@ -1058,7 +1059,7 @@ class ViewerTriGS:
 
     def __init__(self, cfg: ConfigTriGS):
         self.cfg    = cfg
-        self.dev    = cfg.device
+        self.dev    = str(resolve_device(cfg.device))
 
         # Guards `self.splats` against the snapshot watcher swapping it while a
         # render / stats refresh / visibility recompute is reading it. The
@@ -1874,13 +1875,15 @@ class ViewerTriGS:
 
         try:
             new = build()
-        except torch.cuda.OutOfMemoryError:
+        except Exception as exc:  # CUDA OOM or MPS 'out of memory'
+            if not is_oom_error(exc):
+                raise
             # No room for two models: drop the old one (renders wait on the
             # lock meanwhile) and build into the freed memory.
             with self._splats_lock:
                 old, self.splats = self.splats, None
                 del old
-                torch.cuda.empty_cache()
+                empty_cache()
                 try:
                     self.splats = build()
                 except Exception:
@@ -1899,8 +1902,7 @@ class ViewerTriGS:
             with self._splats_lock:
                 old, self.splats = self.splats, new
             del old
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        empty_cache()
 
         self._loaded_file = name
         self._loaded_meta = self._meta_from_payload(name, payload)
@@ -1978,7 +1980,7 @@ def main():
     p.add_argument("--npz-path",      type=str, default=None,
                    help="Row-aligned source NPZ for exact source-cohort diagnostics")
     p.add_argument("--port",          type=int,   default=8080)
-    p.add_argument("--device",        type=str,   default="cuda")
+    p.add_argument("--device",        type=str,   default="auto")
     p.add_argument("--fps",           type=float, default=None,
                    help="Original sequence FPS (used for default play speed). "
                         "Default: from the checkpoint, else 30")

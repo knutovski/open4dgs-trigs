@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 import torch
+from trigs.compat.device import resolve_device  # macOS port
 import torch.nn as nn
 from torch import Tensor
 
@@ -114,7 +115,7 @@ def build_canonical_from_pcd_sequence(
     init_sigma_t: float = 0.0,
     dense_subdir: str = "dense_pcds",
     sparse_subdir: str = "pcds",
-    device: str = "cuda",
+    device: str = "auto",
     fps_chunk_size: int = 16,
     frame_digits: int = 6,
     verbose: bool = False,
@@ -156,7 +157,7 @@ def build_canonical_from_pcd_sequence(
             f"Neither {dense_subdir}/ nor {sparse_subdir}/ found under {data_dir}"
         )
 
-    dev = torch.device(device if torch.cuda.is_available() else "cpu")
+    dev = resolve_device(device)
     stride = max(keyframe_stride, 1)
     fps_safe = max(fps, 1e-6)
     dt_frame = 1.0 / fps_safe

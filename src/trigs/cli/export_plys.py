@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
+from trigs.compat.device import resolve_device  # macOS port
 import tyro
 from gsply import GSTensor
 from torch import Tensor
@@ -82,7 +83,7 @@ class ExportArgs:
     start_frame: int = 0
     """First frame index to decode; time is (start_frame + i) / fps seconds."""
 
-    device: str = "cuda"
+    device: str = "auto"
     """Target device for deformation. Falls back to CPU when CUDA is absent."""
 
     active_opacity_thresh: float = 1e-4
@@ -101,10 +102,8 @@ class ExportArgs:
 
 
 def _resolve_device(requested: str) -> str:
-    if requested.startswith("cuda") and not torch.cuda.is_available():
-        log.warning("CUDA unavailable; exporting on CPU instead of %s", requested)
-        return "cpu"
-    return requested
+    # macOS port: cuda -> mps -> cpu fallback via the central helper.
+    return str(resolve_device(requested))
 
 
 def _load_checkpoint(ckpt_path: Path, device: str) -> dict[str, Any]:
@@ -254,6 +253,7 @@ def _log_checkpoint_summary(
 def main(args: ExportArgs | None = None) -> None:
     if args is None:
         args = tyro.cli(ExportArgs)
+    args.device = str(resolve_device(args.device))
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
     ckpt_path = Path(args.ckpt_path)
