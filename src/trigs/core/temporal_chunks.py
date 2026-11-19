@@ -31,6 +31,7 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 import math
 
 import torch
+from trigs.compat.device import f64  # macOS port
 from torch import Tensor, nn
 
 
@@ -313,9 +314,9 @@ def window_leak_stats(
     share of temporal mass (Gaussian in time, clipped to the clip) outside the owner window.
     Works on any checkpoint, chunked or not, so a chunked run can be compared with an unchunked
     one on the same window layout."""
-    mu = params["times"].detach().reshape(-1).double().cpu()
-    sigma = params["log_durations"].detach().reshape(-1).double().exp().clamp_min(1e-6).cpu()
-    alpha = torch.sigmoid(params["opacities"].detach().reshape(-1).double()).cpu()
+    mu = params["times"].detach().reshape(-1).cpu().double()
+    sigma = params["log_durations"].detach().reshape(-1).cpu().double().exp().clamp_min(1e-6)
+    alpha = torch.sigmoid(params["opacities"].detach().reshape(-1).cpu().double())
     keep = alpha >= float(alive_opacity)
     if "is_static" in params:
         keep &= params["is_static"].detach().reshape(-1).cpu() <= 0.5
@@ -345,7 +346,7 @@ def window_leak_stats(
          if bool(leaking.any()) else [0.0, 0.0])
     return {
         "rows": float(n),
-        "leak_frac": float(leaking.double().mean()),
+        "leak_frac": float(f64(leaking).mean()),
         "overshoot_p50_frames": float(q[0]),
         "overshoot_p99_frames": float(q[1]),
         "mass_outside": float((alpha * outside).sum() / alpha.sum().clamp_min(1e-12)),

@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence
 
 import torch
-from trigs.compat.device import resolve_device  # macOS port
+from trigs.compat.device import resolve_device, f64  # macOS port
 import tyro
 
 from trigs.core.trainer import (
@@ -1120,7 +1120,7 @@ def _apply_split_budget_to_prebuilt_params(
     # the keyframe rows they would see without sub-keyframes.
     sub_keep = dyn_idx[:0]
     if int(keyframe_stride) > 1 and int(dyn_idx.numel()) > 0:
-        frame_off = torch.round(params["times"].detach().reshape(-1)[dyn_idx].double() * float(fps)).long()
+        frame_off = torch.round(f64(params["times"].detach().reshape(-1)[dyn_idx]) * float(fps)).long().to(dyn_idx.device)
         off_grid = (frame_off % int(keyframe_stride)) != 0
         if bool(off_grid.any()):
             sub_keep = dyn_idx[off_grid]
@@ -1815,7 +1815,7 @@ def resolve_target_count(args: "TrigsColmapArgs", params: dict) -> None:
         return
     times = params["times"].detach().reshape(-1)
     dyn = ~(params["is_static"].detach().reshape(-1) > 0.5) if "is_static" in params else torch.ones_like(times, dtype=torch.bool)
-    frame_off = torch.round(times[dyn].double() * float(args.config.fps)).long()
+    frame_off = torch.round(f64(times[dyn]) * float(args.config.fps)).long()
     stride = max(int(args.keyframe_step), 1)
     n_keyframes = int(torch.unique(frame_off[(frame_off % stride) == 0]).numel())
     if n_keyframes == 0:

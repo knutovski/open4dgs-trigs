@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, TYPE_CHECKING
 
 import torch
-from trigs.compat.device import resolve_device, empty_cache, device_synchronize, manual_seed_all, accelerator_rng_states  # macOS port
+from trigs.compat.device import resolve_device, empty_cache, device_synchronize, manual_seed_all, accelerator_rng_states, f64  # macOS port
 import torch.nn as nn
 import torch.nn.functional as F
 from gsplat import rasterization
@@ -905,7 +905,7 @@ def training_camera_extent(
     keep = [i for i in range(int(viewmats.shape[0])) if i not in drop]
     if not keep:
         raise ValueError("training_camera_extent: every camera is excluded")
-    centers = torch.linalg.inv(viewmats[keep].double())[:, :3, 3]
+    centers = torch.linalg.inv(f64(viewmats[keep]))[:, :3, 3]
     return float((centers - centers.mean(dim=0)).norm(dim=-1).max().item())
 
 
@@ -990,7 +990,7 @@ def alive_rows_per_frame(params: Mapping[str, Tensor], n_frames: int, fps: float
     keep = torch.sigmoid(params["opacities"].detach().reshape(-1)) >= float(tau_alpha)
     if "is_static" in params:
         keep &= params["is_static"].detach().reshape(-1) <= 0.5
-    idx = torch.round(mu[keep].double() * float(fps)).long().clamp(0, max(int(n_frames) - 1, 0))
+    idx = torch.round(f64(mu[keep]) * float(fps)).long().clamp(0, max(int(n_frames) - 1, 0))
     return torch.bincount(idx.cpu(), minlength=int(n_frames))
 
 
@@ -1004,8 +1004,8 @@ def short_lived_rows_per_frame(
     """Per frame, the dynamic rows with sigma_t <= ``max_sigma_frames`` frames whose
     +/-2 sigma window (their Bezier window) covers it."""
     fps = max(float(fps), 1e-6)
-    mu = params["times"].detach().reshape(-1).double().cpu() * fps
-    sigma = params["log_durations"].detach().reshape(-1).double().exp().cpu() * fps
+    mu = params["times"].detach().reshape(-1).cpu().double() * fps
+    sigma = params["log_durations"].detach().reshape(-1).cpu().double().exp() * fps
     keep = sigma <= float(max_sigma_frames)
     if "is_static" in params:
         keep &= params["is_static"].detach().reshape(-1).cpu() <= 0.5
@@ -1113,7 +1113,7 @@ def compute_psnr_metrics(
     if tuple(pred.shape) != tuple(gt.shape):
         raise RuntimeError(f"PSNR shape mismatch: pred={tuple(pred.shape)} gt={tuple(gt.shape)}")
 
-    diff2 = (pred - gt).double().pow(2)
+    diff2 = f64(pred - gt).pow(2)
     mse_full = diff2.mean().clamp_min(eps)
     out: Dict[str, float] = {
         "mse_full": float(mse_full.item()),
@@ -1122,7 +1122,7 @@ def compute_psnr_metrics(
 
     m = _as_mask01(mask, (pred.shape[0], pred.shape[1]), threshold=mask_threshold)
     if m is not None:
-        m = m.to(device=pred.device, dtype=torch.float64)
+        m = m.to(device=diff2.device, dtype=torch.float64)
         denom = (m.sum() * pred.shape[-1]).clamp_min(1.0)
         mse_masked = (diff2 * m).sum() / denom
         mse_masked = mse_masked.clamp_min(eps)
@@ -4043,7 +4043,7 @@ class TrigsTrainer:
                     pred = pred.clamp(0.0, 1.0)
                     gt = gt.clamp(0.0, 1.0)
 
-            diff2 = (pred - gt).double().pow(2)
+            diff2 = f64(pred - gt).pow(2)
             sse_i = float(diff2.sum().item())
             denom_i = float(diff2.numel())
             sse_full += sse_i; denom_full += denom_i
@@ -4051,7 +4051,7 @@ class TrigsTrainer:
             image_psnrs_full.append(float(-10.0 * math.log10(mse_i)))
 
             if mask is not None:
-                mask = mask.to(device=self.device, dtype=torch.float64)
+                mask = mask.to(device=diff2.device, dtype=torch.float64)
                 denom_m_i = float((mask.sum() * pred.shape[-1]).item())
                 if denom_m_i > 0:
                     sse_m_i = float((diff2 * mask).sum().item())

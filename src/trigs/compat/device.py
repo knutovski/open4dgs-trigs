@@ -119,6 +119,17 @@ def accelerator_rng_states() -> dict:
     }
 
 
+def f64(x: torch.Tensor) -> torch.Tensor:
+    """``x.double()``, but on the CPU when ``x`` lives on MPS (MPS has no float64).
+
+    Use only where the float64 result is reduced to Python scalars or stays on the
+    CPU; move results back explicitly where a device tensor is needed.
+    """
+    if x.device.type == "mps":
+        return x.detach().cpu().double() if not x.requires_grad else x.cpu().double()
+    return x.double()
+
+
 def gpu_available() -> bool:
     return torch.cuda.is_available() or mps_available()
 
@@ -132,6 +143,6 @@ def is_oom_error(exc: BaseException) -> bool:
 
 __all__ = [
     "AUTO", "accelerator_rng_states", "device_synchronize", "empty_cache",
-    "get_default_device", "gpu_available", "is_oom_error", "manual_seed_all",
+    "f64", "get_default_device", "gpu_available", "is_oom_error", "manual_seed_all",
     "mps_available", "resolve_device",
 ]

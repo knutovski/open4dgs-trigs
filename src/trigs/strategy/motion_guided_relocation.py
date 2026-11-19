@@ -88,6 +88,10 @@ def _compute_relocation_torch(
 def _relocation_split(
     opacities: Tensor, scales: Tensor, ratios: Tensor,
 ) -> tuple[Tensor, Tensor]:
+    if opacities.device.type == "mps":
+        # macOS port: the torch kernel needs float64, which MPS lacks -> run it on the CPU.
+        o, s = _compute_relocation_torch(opacities.cpu(), scales.cpu(), ratios.cpu(), _relocation_binoms("cpu"))
+        return o.to(opacities.device), s.to(scales.device)
     binoms = _relocation_binoms(opacities.device)
     if opacities.is_cuda and _compute_relocation is not None:
         return _compute_relocation(

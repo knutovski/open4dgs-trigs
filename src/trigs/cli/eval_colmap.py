@@ -32,7 +32,7 @@ from typing import Any
 import cv2
 import numpy as np
 import torch
-from trigs.compat.device import resolve_device, empty_cache  # macOS port
+from trigs.compat.device import resolve_device, empty_cache, f64  # macOS port
 import tyro
 from PIL import Image
 from torch import nn
@@ -273,13 +273,14 @@ def _blur_errors(pred: torch.Tensor, photo: torch.Tensor, masks: dict) -> dict:
     pc = pred[:, m:h - m, m:w - m]
     names = list(masks)
     mf = torch.stack([masks[n][m:h - m, m:w - m] for n in names]).to(pred.dtype)
-    err = torch.zeros(len(names), len(_BLUR_SIGMAS), len(_SHIFTS), device=pred.device,
+    err = torch.zeros(len(names), len(_BLUR_SIGMAS), len(_SHIFTS),
+                      device=pred.device if pred.device.type != "mps" else "cpu",  # macOS port: no float64 on MPS
                       dtype=torch.float64)
     for si, s in enumerate(_BLUR_SIGMAS):
         pb = _gauss(photo, s)
         for ki, (dy, dx) in enumerate(_SHIFTS):
             d2 = (pc - pb[:, m + dy:h - m + dy, m + dx:w - m + dx]).pow(2).sum(0)
-            err[:, si, ki] = (d2[None] * mf).sum(dim=(1, 2)).double()
+            err[:, si, ki] = f64((d2[None] * mf).sum(dim=(1, 2)))
     err = err.cpu()
     counts = (mf.sum(dim=(1, 2)) * 3).round().long().tolist()
     return {n: [err[i], int(counts[i])] for i, n in enumerate(names)}
