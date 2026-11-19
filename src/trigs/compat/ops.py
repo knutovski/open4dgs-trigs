@@ -85,8 +85,8 @@ def _knn_kdtree(q: Tensor, tgt: Tensor, K: int):
     """Exact KNN with scipy's cKDTree on all CPU cores. Returns squared dists, idx."""
     import numpy as np
     from scipy.spatial import cKDTree
-    tgt_np = tgt.detach().to("cpu", torch.float64).numpy()
-    q_np = tgt_np if q is tgt else q.detach().to("cpu", torch.float64).numpy()
+    tgt_np = tgt.detach().cpu().to(torch.float64).numpy()  # MPS has no float64: move first
+    q_np = tgt_np if q is tgt else q.detach().cpu().to(torch.float64).numpy()
     tree = cKDTree(tgt_np, balanced_tree=False, compact_nodes=False)
     d, i = tree.query(q_np, k=K, workers=-1)
     if K == 1:
