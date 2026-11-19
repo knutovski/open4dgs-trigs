@@ -76,13 +76,35 @@ def _pytorch3d_ops():
         return None
 
 
+# Above this many query*target pairs (per batch) use a CPU KD-tree (scipy) instead of
+# brute force; brute-force top-k over very wide rows is slow on MPS (1M x 1M: ~7 min).
+_KDTREE_MIN_PAIRS = int(os.environ.get("TRIGS_KNN_KDTREE_MIN_PAIRS", str(1 << 32)))
+
+
+def _knn_kdtree(q: Tensor, tgt: Tensor, K: int):
+    """Exact KNN with scipy's cKDTree on all CPU cores. Returns squared dists, idx."""
+    import numpy as np
+    from scipy.spatial import cKDTree
+    tgt_np = tgt.detach().to("cpu", torch.float64).numpy()
+    q_np = tgt_np if q is tgt else q.detach().to("cpu", torch.float64).numpy()
+    tree = cKDTree(tgt_np, balanced_tree=False, compact_nodes=False)
+    d, i = tree.query(q_np, k=K, workers=-1)
+    if K == 1:
+        d, i = d[:, None], i[:, None]
+    d = torch.from_numpy(np.ascontiguousarray(d * d)).to(device=q.device, dtype=q.dtype)
+    i = torch.from_numpy(np.ascontiguousarray(i)).to(device=q.device, dtype=torch.long)
+    return d, i
+
+
 def knn_points_torch(p1: Tensor, p2: Tensor, K: int = 1) -> KNN:
     """Brute-force KNN like ``pytorch3d.ops.knn_points`` (no lengths, return_nn=False).
 
     Args: p1 [B, P1, D] queries, p2 [B, P2, D] targets.
     Returns KNN(dists [B, P1, K] *squared* distances ascending, idx [B, P1, K], None).
-    Queries are processed in chunks so that at most ``TRIGS_KNN_BUDGET`` distances
-    exist at a time; memory stays O(chunk * P2) instead of O(P1 * P2).
+    Small problems: chunked brute force on the input device (at most
+    ``TRIGS_KNN_BUDGET`` distances at a time). Large problems (P1*P2 >=
+    ``TRIGS_KNN_KDTREE_MIN_PAIRS``, default 2**32, e.g. >65k self-query points):
+    exact CPU KD-tree (scipy), results moved back to the input device.
     """
     if p1.dim() != 3 or p2.dim() != 3 or p1.shape[0] != p2.shape[0]:
         raise ValueError("expected p1 [B,P1,D] and p2 [B,P2,D]")
@@ -94,8 +116,12 @@ def knn_points_torch(p1: Tensor, p2: Tensor, K: int = 1) -> KNN:
     dists = torch.empty((B, P1, K), device=p1.device, dtype=p1.dtype)
     idx = torch.empty((B, P1, K), device=p1.device, dtype=torch.long)
     chunk = max(1, min(P1, _KNN_BUDGET // max(P2, 1)))
+    use_tree = P1 * P2 >= _KDTREE_MIN_PAIRS and not p1.requires_grad
     for b in range(B):
         tgt = p2[b]
+        if use_tree:
+            dists[b], idx[b] = _knn_kdtree(tgt if p1 is p2 else p1[b], tgt, K)
+            continue
         tgt_sq = (tgt * tgt).sum(-1)
         for s in range(0, P1, chunk):
             q = p1[b, s:s + chunk]

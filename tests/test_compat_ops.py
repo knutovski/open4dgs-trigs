@@ -118,3 +118,20 @@ def test_fps_keeps_small_disconnected_component():
     far = torch.tensor([[5.0, 0.0, 0.0], [5.1, 0.0, 0.0]])
     _, idx = sample_farthest_points_torch(torch.cat([main, far])[None], K=8)
     assert bool((idx[0] >= 1000).any())
+
+
+@pytest.mark.parametrize("dev", _DEVICES)
+@pytest.mark.parametrize("D", [3, 4])
+def test_knn_kdtree_path_matches_brute_force(dev, D, monkeypatch):
+    g = torch.Generator().manual_seed(10 + D)
+    p = torch.rand(1, 2000, D, generator=g).to(dev)
+    q = torch.rand(1, 700, D, generator=g).to(dev)
+    monkeypatch.setattr("trigs.compat.ops._KDTREE_MIN_PAIRS", 1 << 62)
+    ref_self, ref_q = knn_points_torch(p, p, K=11), knn_points_torch(q, p, K=5)
+    monkeypatch.setattr("trigs.compat.ops._KDTREE_MIN_PAIRS", 1)
+    tree_self, tree_q = knn_points_torch(p, p, K=11), knn_points_torch(q, p, K=5)
+    assert tree_self.idx.device == p.device
+    assert torch.equal(tree_self.idx[0, :, 0].cpu(), torch.arange(2000))
+    for r, t in [(ref_self, tree_self), (ref_q, tree_q)]:
+        assert torch.allclose(r.dists.cpu(), t.dists.cpu(), atol=1e-5)
+        assert (r.idx.cpu() == t.idx.cpu()).float().mean() > 0.999  # ties may swap
