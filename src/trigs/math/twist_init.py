@@ -32,7 +32,7 @@ def local_knn_indices(points: Tensor, k: int) -> Tensor:
 
     k_eff = max(1, min(int(k), N - 1))
     try:
-        from pytorch3d.ops import knn_points
+        from trigs.compat.ops import knn_points  # macOS port (uses pytorch3d on CUDA if installed)
 
         res = knn_points(points.unsqueeze(0), points.unsqueeze(0), K=k_eff + 1)
         return res.idx.squeeze(0)[:, 1:].contiguous()

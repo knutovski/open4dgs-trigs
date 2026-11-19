@@ -667,7 +667,7 @@ class TrigsTrainer:
                 [means, config.fps_time_weight * scene_extent * t_norm_fps],
                 dim=-1,
             ).unsqueeze(0)  # [1, N, 4]
-            from pytorch3d.ops import sample_farthest_points
+            from trigs.compat.ops import sample_farthest_points  # macOS port (uses pytorch3d on CUDA if installed)
             _, idx = sample_farthest_points(
                 pts4d, K=config.target_count, random_start_point=False,
             )
@@ -972,7 +972,7 @@ class TrigsTrainer:
         """
         k = max(1, min(k, tgt.shape[0]))
         try:
-            from pytorch3d.ops import knn_points
+            from trigs.compat.ops import knn_points  # macOS port (uses pytorch3d on CUDA if installed)
             res = knn_points(src.unsqueeze(0), tgt.unsqueeze(0), K=k)
             nn_idx = res.idx.squeeze(0)                  # [Ns, k]
         except ImportError:
@@ -1121,7 +1121,7 @@ class TrigsTrainer:
             pts = means
 
         try:
-            from pytorch3d.ops import knn_points
+            from trigs.compat.ops import knn_points  # macOS port (uses pytorch3d on CUDA if installed)
             pts_batched = pts.unsqueeze(0)
             result = knn_points(pts_batched, pts_batched, K=k + 1)
             idx = result.idx.squeeze(0)[:, 1:]  # drop self

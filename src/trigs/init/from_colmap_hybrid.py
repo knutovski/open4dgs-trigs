@@ -235,7 +235,7 @@ def _apply_selfcap_fps(
     ]
 
     try:
-        from pytorch3d.ops import sample_farthest_points
+        from trigs.compat.ops import sample_farthest_points  # macOS port (uses pytorch3d on CUDA if installed)
 
         chunk_size = max(int(fps_chunk_size), 1)
         for chunk_start in range(0, len(all_means), chunk_size):

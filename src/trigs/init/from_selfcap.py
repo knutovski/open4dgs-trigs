@@ -81,7 +81,7 @@ def _knn_mean_positions(src: Tensor, tgt: Tensor, k: int) -> Tensor:
     """For each row of ``src``, mean 3-D position of its k nearest neighbors in tgt."""
     k = max(1, min(k, tgt.shape[0]))
     try:
-        from pytorch3d.ops import knn_points
+        from trigs.compat.ops import knn_points  # macOS port (uses pytorch3d on CUDA if installed)
         res = knn_points(src.unsqueeze(0), tgt.unsqueeze(0), K=k)
         nn_idx = res.idx.squeeze(0)
     except ImportError:
@@ -337,7 +337,7 @@ def build_canonical_from_pcd_sequence(
         chunk_size = max(int(fps_chunk_size), 1)
 
         try:
-            from pytorch3d.ops import sample_farthest_points
+            from trigs.compat.ops import sample_farthest_points  # macOS port (uses pytorch3d on CUDA if installed)
 
             for chunk_start in range(0, len(all_means), chunk_size):
                 chunk_ids = list(range(chunk_start, min(chunk_start + chunk_size, len(all_means))))

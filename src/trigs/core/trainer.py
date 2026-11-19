@@ -3454,7 +3454,7 @@ class TrigsTrainer:
     def _knn_mean_positions(src: Tensor, tgt: Tensor, k: int) -> Tensor:
         k = max(1, min(k, tgt.shape[0]))
         try:
-            from pytorch3d.ops import knn_points
+            from trigs.compat.ops import knn_points  # macOS port (uses pytorch3d on CUDA if installed)
             res = knn_points(src.unsqueeze(0), tgt.unsqueeze(0), K=k)
             nn_idx = res.idx.squeeze(0)
         except ImportError:
@@ -3546,7 +3546,7 @@ class TrigsTrainer:
             pts = means
 
         try:
-            from pytorch3d.ops import knn_points
+            from trigs.compat.ops import knn_points  # macOS port (uses pytorch3d on CUDA if installed)
             pts_batched = pts.unsqueeze(0)
             result = knn_points(pts_batched, pts_batched, K=k + 1)
             idx = result.idx.squeeze(0)[:, 1:]

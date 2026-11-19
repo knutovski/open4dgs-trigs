@@ -63,7 +63,7 @@ def _knn_distance(points: Tensor, k: int = 4) -> Tensor:
     k_eff = max(1, min(k, n_points - 1))
 
     try:
-        from pytorch3d.ops import knn_points
+        from trigs.compat.ops import knn_points  # macOS port (uses pytorch3d on CUDA if installed)
 
         res = knn_points(points.unsqueeze(0), points.unsqueeze(0), K=k_eff + 1)
         dists = res.dists.squeeze(0).sqrt()[:, 1:]

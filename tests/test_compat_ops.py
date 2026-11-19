@@ -57,3 +57,64 @@ def test_ssim_mps_matches_cpu():
     cpu = ssim_fused_compatible(a, b)
     mps = ssim_fused_compatible(a.to("mps"), b.to("mps")).cpu()
     assert torch.allclose(cpu, mps, atol=1e-5)
+
+
+# --- pytorch3d replacements -------------------------------------------------
+from trigs.compat.ops import knn_points_torch, sample_farthest_points_torch  # noqa: E402
+
+_DEVICES = ["cpu"] + (["mps"] if torch.backends.mps.is_available() else [])
+
+
+@pytest.mark.parametrize("dev", _DEVICES)
+@pytest.mark.parametrize("D", [3, 4])
+def test_knn_matches_brute_force(dev, D, monkeypatch):
+    monkeypatch.setattr("trigs.compat.ops._KNN_BUDGET", 700)  # force many chunks
+    g = torch.Generator().manual_seed(D)
+    p1 = torch.rand(2, 300, D, generator=g, dtype=torch.float64)
+    p2 = torch.rand(2, 250, D, generator=g, dtype=torch.float64)
+    ref_d = torch.cdist(p1, p2) ** 2
+    ref_v, ref_i = ref_d.topk(7, dim=-1, largest=False, sorted=True)
+    dt = torch.float32 if dev == "mps" else torch.float64
+    res = knn_points_torch(p1.to(dev, dt), p2.to(dev, dt), K=7)
+    assert torch.equal(res.idx.cpu(), ref_i)
+    assert torch.allclose(res.dists.cpu().double(), ref_v, atol=1e-5 if dev == "mps" else 1e-10)
+
+
+@pytest.mark.parametrize("dev", _DEVICES)
+def test_knn_self_query_puts_self_first(dev):
+    p = torch.rand(1, 500, 3).to(dev)
+    res = knn_points_torch(p, p, K=4)
+    assert torch.equal(res.idx[0, :, 0].cpu(), torch.arange(500))
+
+
+def _fps_ref(pts, k):
+    sel = [0]
+    d = ((pts - pts[0]) ** 2).sum(-1)
+    for _ in range(k - 1):
+        j = int(torch.argmax(d)); sel.append(j)
+        d = torch.minimum(d, ((pts - pts[j]) ** 2).sum(-1))
+    return torch.tensor(sel)
+
+
+@pytest.mark.parametrize("dev", _DEVICES)
+def test_fps_matches_reference_with_lengths_and_per_batch_k(dev):
+    g = torch.Generator().manual_seed(3)
+    pts = torch.rand(3, 400, 3, generator=g, dtype=torch.float64)
+    lengths = torch.tensor([400, 250, 31])
+    K = torch.tensor([50, 20, 40])  # last one exceeds its length -> clamped to 31
+    dt = torch.float32 if dev == "mps" else torch.float64
+    sampled, idx = sample_farthest_points_torch(pts.to(dev, dt), lengths=lengths.to(dev), K=K.to(dev))
+    idx, sampled = idx.cpu(), sampled.cpu().double()
+    assert idx.shape == (3, 50)
+    for b, (n, k) in enumerate([(400, 50), (250, 20), (31, 31)]):
+        assert torch.equal(idx[b, :k], _fps_ref(pts[b, :n], k))
+        assert bool((idx[b, k:] == -1).all())
+        assert torch.allclose(sampled[b, :k], pts[b, idx[b, :k]], atol=1e-6)
+        assert bool((sampled[b, k:] == 0).all())
+
+
+def test_fps_keeps_small_disconnected_component():
+    main = torch.randn(1000, 3) * 0.05
+    far = torch.tensor([[5.0, 0.0, 0.0], [5.1, 0.0, 0.0]])
+    _, idx = sample_farthest_points_torch(torch.cat([main, far])[None], K=8)
+    assert bool((idx[0] >= 1000).any())
