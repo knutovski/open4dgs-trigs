@@ -57,9 +57,9 @@ TRIGS_DEVICE=cpu .venv/bin/python -m pytest open4dgs-trigs/tests -q   # CPU
 .venv/bin/python -m pytest open4dgs-trigs/tests -q                    # MPS (auto)
 ```
 
-Result on the test machine: 240 passed, 5 failed, 3 skipped (CPU and MPS identical) before the compat and
-MPS rasterization tests were added; those (17 + 2) pass. The 5 failures fail identically with the
-**unmodified upstream code** in the same environment (test issues, not port issues):
+Result on the test machine (fresh install per this guide, 20 Nov 2026, 73 s install time with a warm
+uv cache): 246 passed, 5 failed, 3 skipped. The 5 failures fail identically with the **unmodified upstream
+code** in the same environment (test issues, not port issues):
 `test_colmap_mask_loader` (2: expects `.png`, loader default is `.jpg`),
 `test_ply_pipeline::test_ply_frames_build_current_canonical_contract` and
 `::test_ply_target_count_is_applied_before_initialization` (patch `sys.modules["gsply"]` after `GSTensor`
