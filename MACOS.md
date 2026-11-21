@@ -121,7 +121,7 @@ macOS specifics:
 | `src/trigs/compat/ops.py` | `knn_points` (chunked brute force; exact scipy KD-tree for large inputs), `sample_farthest_points` (batched, `lengths`, per-batch `K`), `ssim_fused_compatible` (reproduces `fused_ssim(padding="valid")`). With pytorch3d installed and CUDA tensors, pytorch3d is used. |
 | `src/trigs/**` | hard-coded `"cuda"`/`torch.cuda.*` (60 places) → helpers; device defaults `"auto"`; float64 math moved off MPS (13 places); float64 relocation kernel runs on the CPU for MPS tensors |
 | `open4dgs-core/prep/device_compat.py` | same device selection for prep scripts |
-| `open4dgs-core/prep/align/build-colmap-ref-trigs.py` | COLMAP 3/4 option names, CPU fallback |
+| `open4dgs-core/prep/align/build-colmap-ref-trigs.py` | COLMAP 3/4 option names, CPU fallback; new `--single-camera` (shared intrinsics) and SIFT density options (defaults unchanged) |
 
 Environment variables: `TRIGS_DEVICE` (`cpu`, `mps`, `cuda:N`), `TRIGS_KNN_BUDGET` (default 2^28 distances
 per chunk), `TRIGS_KNN_KDTREE_MIN_PAIRS` (default 2^32), `TRIGS_COMPAT_FORCE_TORCH=1` (ignore pytorch3d),
