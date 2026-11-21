@@ -4,10 +4,11 @@ This fork runs the TRiGS trainer (`open4dgs-trigs`) and the main Open4DGS-Core p
 Apple Silicon Mac without an NVIDIA GPU, using the PyTorch **MPS** backend. CUDA code paths are kept: on an
 NVIDIA host the fork behaves like upstream.
 
-> **Status (20 Nov 2026):** training, evaluation and PLY export run end-to-end on MPS with a small
-> synthetic dataset. Preparation models (RoMa v2, MEMFOF) run on MPS. A full run on real footage
-> (extraction → calibration → sync → point preparation → training) is **not yet tested**; see
-> [Limitations](#known-limitations).
+> **Status (21 Nov 2026):** the full pipeline runs on an Apple Silicon Mac: frame extraction, COLMAP
+> calibration, sub-frame sync, point preparation (RoMa v2 + MEMFOF on MPS), training, evaluation and PLY
+> export. Tested end-to-end with a synthetic dataset and with a short real capture (4× DJI Osmo Pocket 3,
+> 1080p50). Reconstruction quality of that capture was limited by its calibration and its small motion,
+> not by the port; see [Lessons from a real capture](#7-lessons-from-a-real-capture-4-cameras).
 
 Tested on: Mac Studio, Apple M5 Max, 128 GB unified memory, macOS 27.2.1, Python 3.13.17, PyTorch 2.15.0,
 COLMAP 4.2.1 (Homebrew, no GPU), uv 0.13.5.
@@ -79,6 +80,9 @@ whether it passes with upstream torch 2.10 is untested).
 .venv/bin/python open4dgs-trigs/macos/render_ply_compare.py data/synth01 runs/synth01/plys compare.png
 ```
 
+For real captures, `macos/render_real_compare.py <capture> <ply_dir> out.jpg` renders exported PLYs from the
+calibrated cameras next to the undistorted source frames.
+
 The generator renders a known scene (static room plus a moving, rotating sphere) with mpsplat and writes
 `sparse/0`, `images/camXX/`, and a `keyframes.npz` in the format of `prep-roma-trigs-memory.py`.
 
@@ -92,11 +96,17 @@ macOS specifics:
 - `build-colmap-ref-trigs.py` detects COLMAP 4 option names (`FeatureExtraction.*`/`FeatureMatching.*`)
   and uses CPU SIFT when COLMAP has no GPU support (Homebrew build). Feature extraction is slower than
   with CUDA.
+- **Frame rate:** any frame rate works, but many prep scripts default to `--fps 60`. Pass the capture's rate
+  (e.g. `--fps 50`) to every step. In 50 Hz mains countries, record artificial light at 50 fps with a
+  1/100 or 1/200 s shutter to avoid flicker.
+- **Calibration with few identical cameras:** `build-colmap-ref-trigs.py --single-camera --camera-model RADIAL`
+  shares one intrinsics set; per-camera `OPENCV` models from one image each were unusable (see section 7).
+  `--max-num-features`/`--sift-peak-threshold` raise SIFT density. Prep scripts accept `RADIAL`.
 - **Cameras without timecode** (e.g. DJI Osmo Pocket 3): `extract_synced_sequence.py` needs embedded
   timecode. Instead, align the clips frame-accurately (e.g. by audio in an editor), export one file per
   camera with identical start and length, unchanged resolution and frame rate, no stabilisation, and use
   `prep/extract/extract_synthetic_multiview.py`. `calculate-sync.py` then solves the remaining sub-frame
-  offsets visually.
+  offsets visually. Make sure the export does not end on a black frame.
 - Rolling-shutter readout of other cameras is unknown upstream (15 ms is the Sony RX0 II at 60 fps).
   `calculate-sync.py --rs-mode report` and `prep/sync/audit-rolling-shutter.py` estimate it.
 - Default point-prep route in this repo's README (`--roma-input-dir`, `trigs.init.roma_combine`) does not
@@ -117,7 +127,7 @@ Environment variables: `TRIGS_DEVICE` (`cpu`, `mps`, `cuda:N`), `TRIGS_KNN_BUDGE
 per chunk), `TRIGS_KNN_KDTREE_MIN_PAIRS` (default 2^32), `TRIGS_COMPAT_FORCE_TORCH=1` (ignore pytorch3d),
 `PYTORCH_ENABLE_MPS_FALLBACK` (not needed so far; keep 0 to see unsupported ops).
 
-## 6. Measurements (M5 Max, 128 GB; measured 19–20 Nov 2026)
+## 6. Measurements (M5 Max, 128 GB; measured 19–21 Nov 2026)
 
 | What | Result |
 | --- | --- |
@@ -129,12 +139,40 @@ per chunk), `TRIGS_KNN_KDTREE_MIN_PAIRS` (default 2^32), `TRIGS_COMPAT_FORCE_TOR
 | RoMa v2 (precise), 480×270 pair | 1.08 s (first call 5.5 s); epipolar error vs known cameras median 0.11 px |
 | MEMFOF, 480×270 triplet | 0.08 s (first call 1.3 s) |
 
-Real-footage numbers (resolution, camera count, prep and training time, memory): **not yet measured.**
+Real capture: 4 cameras, 1920×1080, 50 fps, 230 frames (21 Nov 2026):
+
+| Step | Time / memory |
+| --- | --- |
+| Frame extraction (`extract_synthetic_multiview.py`, JPEG q2) | 1 s |
+| COLMAP reference (`build-colmap-ref-trigs.py`, CPU SIFT, 4 images) | 9–35 s |
+| `calculate-sync.py`, 1080p, 72 frame/pair measurements | 168 s, 0.5 GB |
+| `prep-roma-trigs-memory.py` (45 keyframes, RoMa v2 + MEMFOF on MPS) | 26 min, peak 9.2 GB |
+| Training, 300 steps (108k primitives, 4 cameras per step) | 53 s total, ~8.9 steps/s at the start |
+| Training, 10,000 steps | 1 h 51 min, peak 5.4 GB (slowed to ~1 step/s, see section 7) |
+| Export 230 PLYs | 3.6 GB, 62–76k primitives per frame |
+
+## 7. Lessons from a real capture (4 cameras)
+
+These are properties of the data and the method, not of macOS, but they decide the result:
+
+- **Calibration:** with one reference frame from 4 static cameras, COLMAP fits its own SIFT tracks well
+  (0.46 px) but covered only 38–52 % of each image; dense RoMa matches over the whole image had a median
+  epipolar error of 7–13 px, so `prep-roma-trigs-memory.py` rejected 72–79 % of matches at its 2.5 px gate.
+  Use more cameras/overlap or additional calibration images; check with a dense-match epipolar test before
+  point preparation: `.venv/bin/python open4dgs-trigs/macos/diag_epipolar.py <capture> 1 precise`
+  (median well below 2 px is good).
+- **Sync observability:** `calculate-sync.py` needs visible motion across epipolar lines. Slow gestures
+  (~0.4 px/frame) left every phase estimate at the search boundary. Start each take with a few seconds of
+  vigorous motion seen by all cameras.
+- **Training speed depends on splat sizes:** after 10k steps a tail of huge splats (image radius p99 700 px,
+  max 5,663 px) raised tile intersections 57× and the time per step from ~0.11 s to ~1.1 s
+  (upstream options `--config.max-scale-exp` and `--config.max-scale-anisotropy` cap splat size and are
+  off by default; their effect on this capture is untested). Measure early runs at more than one point before extrapolating runtimes.
 
 ## Known limitations
 
-- Untested so far: full preparation on real footage, long sequences / chunked training, masks (SAM 2,
-  BGMv2), `trigs-train-plys` and `trigs-train-selfcap` paths, the interactive viewer on MPS.
+- Untested so far: long sequences / chunked training, masks (SAM 2, BGMv2: need a clean background plate
+  or extra checkpoints), `trigs-train-plys` and `trigs-train-selfcap` paths, learned camera time offsets.
 - Not ported: EasyVolCap / 4K4D camera refinement (needs Torch 2.1 + CUDA 11.8 + tiny-cuda-nn),
   VGGT alignment. Neither is part of the main pipeline.
 - No distributed (multi-GPU) training on macOS.
