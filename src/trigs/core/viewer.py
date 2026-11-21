@@ -1696,11 +1696,11 @@ class ViewerTriGS:
             n_coeffs = colors.shape[-2]
             max_sh = int(n_coeffs ** 0.5) - 1
             sh_degree = min(self.splats.sh_degree_render, max_sh)
-        background = torch.tensor(
+        background = (torch.tensor(
             self.background_color.value,
             device=self.dev,
             dtype=torch.float32,
-        ) / 255.0
+        ) / 255.0)[None]  # [C=1, 3]: gsplat 1.5.3 expects one background per camera
         render_colors, _, _ = rasterization(
             means      = means,
             quats      = quats,
