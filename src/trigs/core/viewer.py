@@ -1714,7 +1714,8 @@ class ViewerTriGS:
             sh_degree  = sh_degree,
             near_plane = self.cfg.near_plane,
             far_plane  = self.cfg.far_plane,
-            packed     = self.cfg.packed,
+            # macOS port: mpsplat implements only packed=False on MPS.
+            packed     = self.cfg.packed and not str(self.dev).startswith("mps"),
             rasterize_mode = rast_mode,
             backgrounds    = background,
         )
