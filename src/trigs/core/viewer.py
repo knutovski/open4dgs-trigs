@@ -349,6 +349,9 @@ class ConfigTriGS:
     far_plane:   float = 1e10
     antialiased: bool  = False
     packed:      bool  = True
+    # Optional start view: a reference_export.json (Open4DGS-Core) and the camera folder to start from.
+    start_camera_json: Optional[str] = None
+    start_camera: Optional[str] = None
 
     # Performance
     precompute_visibility:    bool = True
@@ -1108,6 +1111,7 @@ class ViewerTriGS:
         self.play_speed    = cfg.fps
 
         self.server = viser.ViserServer(port=cfg.port, verbose=False)
+        self._set_start_camera()
         self._build_ui()
 
         self.viewer = nerfview.Viewer(
@@ -1115,6 +1119,27 @@ class ViewerTriGS:
             render_fn=self._render,
             mode="rendering",
         )
+
+    def _set_start_camera(self) -> None:
+        """Open the browser view at a calibrated capture camera (--start-camera-json)."""
+        if not self.cfg.start_camera_json:
+            return
+        import json
+        cams = json.loads(Path(self.cfg.start_camera_json).read_text())["cameras"]
+        cams = sorted(cams, key=lambda c: str(c.get("folder", c.get("name", ""))))
+        want = self.cfg.start_camera
+        cam = next((c for c in cams if want in (c.get("folder"), c.get("name"))), cams[0]) if want else cams[0]
+        R = np.asarray(cam["R"], dtype=np.float64)          # world -> camera (COLMAP: x right, y down, z forward)
+        t = np.asarray(cam["t"], dtype=np.float64)
+        center = -R.T @ t
+        forward, down = R.T @ np.array([0.0, 0.0, 1.0]), R.T @ np.array([0.0, 1.0, 0.0])
+        f = float(cam["params"][0]); h = float(cam["height"])
+        ic = self.server.initial_camera
+        ic.position = tuple(center)
+        ic.look_at = tuple(center + forward)
+        ic.up = tuple(-down)
+        ic.fov = float(2.0 * np.arctan(0.5 * h / f))
+        print(f"  Start view: camera {cam.get('folder', cam.get('name'))} at {np.round(center, 3).tolist()}")
 
     # ── UI ────────────────────────────────────────────────────────────────────
 
@@ -2005,6 +2030,10 @@ def main():
                         "snapshot's is the degree training currently renders "
                         "at), else 3")
     p.add_argument("--antialiased",  action="store_true")
+    p.add_argument("--start-camera-json", type=str, default=None,
+                   help="reference_export.json of the capture: open the view at a calibrated camera")
+    p.add_argument("--start-camera", type=str, default=None,
+                   help="camera folder (e.g. cam01) for --start-camera-json; default: first camera")
     a = p.parse_args()
     if a.watch is None and a.ckpt is None:
         p.error("one of --ckpt or --watch is required")
@@ -2029,6 +2058,8 @@ def main():
         precompute_visibility      = not a.no_precompute,
         sh_degree                  = a.sh_degree,
         antialiased                = a.antialiased,
+        start_camera_json          = a.start_camera_json,
+        start_camera               = a.start_camera,
     )
 
     ViewerTriGS(cfg).run()
