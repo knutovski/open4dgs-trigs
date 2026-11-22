@@ -86,6 +86,17 @@ calibrated cameras next to the undistorted source frames.
 The generator renders a known scene (static room plus a moving, rotating sphere) with mpsplat and writes
 `sparse/0`, `images/camXX/`, and a `keyframes.npz` in the format of `prep-roma-trigs-memory.py`.
 
+### Interactive viewer
+
+```bash
+.venv/bin/python -m trigs.core.viewer --ckpt runs/<name>/trigs_ckpt.pt --fps 50 --total-frames <N> \
+    --temporal-threshold 0.01 --start-camera-json <capture>/reference_export.json --start-camera cam01
+```
+
+Open http://localhost:8080 in a new browser tab. `--start-camera-json/--start-camera` (added in this fork)
+opens the view at a calibrated capture camera; with few cameras the reconstruction is only usable near those
+viewpoints. On MPS the viewer renders with `packed=False` (mpsplat has no packed path).
+
 ## 4. Real captures: preparation on macOS
 
 Follow upstream [docs/run-pipeline.md](https://github.com/ASU-NEM-Labs/open4dgs-core/blob/main/docs/run-pipeline.md).
@@ -119,6 +130,7 @@ macOS specifics:
 | --- | --- |
 | `src/trigs/compat/device.py` | device selection (`auto`, `TRIGS_DEVICE`), synchronize / empty-cache / seeding / RNG-state / OOM helpers, `f64()` (float64 on the CPU for MPS tensors) |
 | `src/trigs/compat/ops.py` | `knn_points` (chunked brute force; exact scipy KD-tree for large inputs), `sample_farthest_points` (batched, `lengths`, per-batch `K`), `ssim_fused_compatible` (reproduces `fused_ssim(padding="valid")`). With pytorch3d installed and CUDA tensors, pytorch3d is used. |
+| `src/trigs/core/viewer.py` | `packed=False` on MPS; backgrounds passed as `[1, 3]` (upstream passed `[3]`, which gsplat 1.5.3 rejects); optional start view at a calibrated camera |
 | `src/trigs/**` | hard-coded `"cuda"`/`torch.cuda.*` (60 places) → helpers; device defaults `"auto"`; float64 math moved off MPS (13 places); float64 relocation kernel runs on the CPU for MPS tensors |
 | `open4dgs-core/prep/device_compat.py` | same device selection for prep scripts |
 | `open4dgs-core/prep/align/build-colmap-ref-trigs.py` | COLMAP 3/4 option names, CPU fallback; new `--single-camera` (shared intrinsics) and SIFT density options (defaults unchanged) |
