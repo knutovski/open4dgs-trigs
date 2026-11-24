@@ -1,3 +1,12 @@
+> [!NOTE]
+> **Unofficial macOS (Apple Silicon) port.** This is a modified fork of
+> [ASU-NEM-Labs/open4dgs-trigs](https://github.com/ASU-NEM-Labs/open4dgs-trigs), changed from November 2026
+> (branch `macos-port`, based on upstream commit `ed7a84a`) to run on Apple Silicon Macs with the PyTorch MPS
+> backend; CUDA paths are kept. It is not affiliated with or endorsed by the original authors. See
+> **[MACOS.md](MACOS.md)** for installation, the list of changes and known limitations. The companion
+> preparation fork is [knutovski/open4dgs-core](https://github.com/knutovski/open4dgs-core/tree/macos-port).
+> The original README follows unchanged.
+
 <div align="center">
 
 # Open4DGS-Trigs

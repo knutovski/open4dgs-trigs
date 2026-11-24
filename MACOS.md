@@ -1,5 +1,7 @@
 # Open4DGS on macOS (Apple Silicon)
 
+*Unofficial port; not affiliated with or endorsed by the Open4DGS authors.*
+
 This fork runs the TRiGS trainer (`open4dgs-trigs`) and the main Open4DGS-Core preparation steps on an
 Apple Silicon Mac without an NVIDIA GPU, using the PyTorch **MPS** backend. CUDA code paths are kept: on an
 NVIDIA host the fork behaves like upstream.
@@ -26,8 +28,8 @@ Python, model caches) is created inside it.
 
 ```bash
 mkdir -p ~/Projekte/open4dgs-mac && cd ~/Projekte/open4dgs-mac
-git clone -b macos-port <your fork of open4dgs-trigs> open4dgs-trigs
-git clone -b macos-port <your fork of open4dgs-core>  open4dgs-core
+git clone -b macos-port https://github.com/knutovski/open4dgs-trigs open4dgs-trigs
+git clone -b macos-port https://github.com/knutovski/open4dgs-core  open4dgs-core
 open4dgs-trigs/macos/install.sh            # trainer only
 open4dgs-trigs/macos/install.sh --prep     # also RoMa v2 + MEMFOF for open4dgs-core/prep
 ```
