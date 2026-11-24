@@ -11,12 +11,14 @@ Unofficial port of [Open4DGS-Trigs](https://github.com/ASU-NEM-Labs/open4dgs-tri
 | File | What it is |
 | --- | --- |
 | `trigs-0.1.0+macos.1-py3-none-any.whl` | the trainer package of this release |
-| `mpsplat-1.5.3-py3-none-any.whl` | mpsplat built from commit `5a6bf1b` (provides `gsplat`), Apache-2.0 |
+| `mpsplat-1.5.3-py3-none-any.whl` | mpsplat built from commit `5a6bf1b` (provides `gsplat`), Apache-2.0; only packaging changed: its test folder is left out of the wheel |
 | `LICENSE-mpsplat.txt` | mpsplat's license |
 | `requirements-macos-lock.txt` | exact versions this release was tested with (torch 2.15.0, Python 3.13) |
 | `SHA256SUMS` | checksums of the files above |
 
 ## Install
+Installation from the lock file downloads about 1 GB of packages (PyTorch and others); it took 12 minutes on the test machine with an empty package cache.
+
 See [MACOS.md](https://github.com/knutovski/open4dgs-trigs/blob/macos-port/MACOS.md#install-from-a-github-release-prebuilt-wheels): clone both forks, download the assets, run `open4dgs-trigs/macos/install.sh --from-release=<dir>`.
 
 ## Tested
