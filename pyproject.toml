@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trigs"
-version = "0.1.0"
+version = "0.1.0+macos.1"
 description = "TriGS: Temporally-Resolving Implicit Gaussian Splatting with coupled SE(3) motion and Bezier residuals"
 readme = "README.md"
 requires-python = ">=3.10"

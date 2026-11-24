@@ -52,6 +52,19 @@ aborts Python with `OMP: Error #15`. The script points pycolmap's copy at torch'
 Model weights (`--prep`, downloaded on first use, ~1.4 GB) go to `<workspace>/.cache` when you
 `source open4dgs-trigs/macos/env.sh` first.
 
+### Install from a GitHub release (prebuilt wheels)
+
+Each release of this fork (e.g. `v0.1.0-macos.1`) attaches `trigs-*.whl`, `mpsplat-*.whl` (built from the pinned
+mpsplat commit, Apache-2.0, see `LICENSE-mpsplat.txt`) and `requirements-macos-lock.txt` (the exact package
+versions the release was tested with). With the two forks cloned as above:
+
+```bash
+gh release download v0.1.0-macos.1 -R knutovski/open4dgs-trigs -D release
+open4dgs-trigs/macos/install.sh --from-release=release
+```
+
+The wheels are pure Python (mpsplat compiles its Metal shaders at run time) and need Python 3.13 on Apple Silicon.
+
 ## 2. Check the installation
 
 ```bash
